@@ -20,7 +20,11 @@ using Microsoft.VisualStudio.Threading;
 using System.Threading.Channels;
 using ISavable = Flow.Launcher.Plugin.ISavable;
 using System.IO;
+using System.Security.Principal;
+using System.IO.Pipes;
 using System.Collections.Specialized;
+using System.Text;
+using System.Buffers;
 
 namespace Flow.Launcher.ViewModel
 {
@@ -179,13 +183,56 @@ namespace Flow.Launcher.ViewModel
                 }
             });
 
-            SelectNextItemCommand = new RelayCommand(_ => { SelectedResults.SelectNextResult(); });
+            SelectNextItemCommand = new RelayCommand(_ => {
+                SelectedResults.SelectNextResult();
+                OpenQuickLook.Execute("Switch");
+            });
 
-            SelectPrevItemCommand = new RelayCommand(_ => { SelectedResults.SelectPrevResult(); });
+            SelectPrevItemCommand = new RelayCommand(_ => {
+                SelectedResults.SelectPrevResult();
+                OpenQuickLook.Execute("Switch");
+            });
 
             SelectNextPageCommand = new RelayCommand(_ => { SelectedResults.SelectNextPage(); });
 
             SelectPrevPageCommand = new RelayCommand(_ => { SelectedResults.SelectPrevPage(); });
+
+
+
+#pragma warning disable VSTHRD101 // Avoid unsupported async delegates
+            OpenQuickLook = new RelayCommand(async command =>
+            {
+                var results = SelectedResults;
+                var result = results.SelectedItem?.Result;
+
+                if (result is null)
+                    return;
+                if (command is null)
+                {
+                    command = "Toggle";
+                }
+                string pipeName = "QuickLook.App.Pipe." + WindowsIdentity.GetCurrent().User?.Value;
+
+                await using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
+                try
+                {
+                    await client.ConnectAsync(100).ConfigureAwait(false);
+                    var message = $"QuickLook.App.PipeMessages.{command}|{result.QuickLookPath}\n";
+                    using var buffer = MemoryPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(message.Length));
+                    var count = Encoding.UTF8.GetBytes(message, buffer.Memory.Span);
+                    await client.WriteAsync(buffer.Memory[..count]);
+                }
+                catch (System.TimeoutException)
+                {
+                    if ((string)command == "Toggle")
+                    {
+                        Log.Warn("MainViewModel", "Unable to activate quicklook");
+                    }
+                    
+                }
+                
+            });
+#pragma warning restore VSTHRD101 // Avoid unsupported async delegates
 
             SelectFirstResultCommand = new RelayCommand(_ => SelectedResults.SelectFirstResult());
 
@@ -425,9 +472,8 @@ namespace Flow.Launcher.ViewModel
         public ICommand OpenSettingCommand { get; set; }
         public ICommand ReloadPluginDataCommand { get; set; }
         public ICommand ClearQueryCommand { get; private set; }
-
+        public ICommand OpenQuickLook { get; set; }
         public ICommand CopyToClipboard { get; set; }
-
         public ICommand AutocompleteQueryCommand { get; set; }
 
         public string OpenResultCommandModifiers { get; private set; }
