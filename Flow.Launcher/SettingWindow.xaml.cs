@@ -13,12 +13,15 @@ using ModernWpf;
 using System;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Navigation;
 using Button = System.Windows.Controls.Button;
 using Control = System.Windows.Controls.Control;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using MessageBox = System.Windows.MessageBox;
 using TextBox = System.Windows.Controls.TextBox;
 using ThemeManager = ModernWpf.ThemeManager;
@@ -41,9 +44,11 @@ namespace Flow.Launcher
             DataContext = viewModel;
             this.viewModel = viewModel;
             API = api;
+
         }
 
         #region General
+
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             RefreshMaximizeRestoreButton();
@@ -52,6 +57,9 @@ namespace Flow.Launcher
             HwndSource hwndSource = PresentationSource.FromVisual(this) as HwndSource;
             HwndTarget hwndTarget = hwndSource.CompositionTarget;
             hwndTarget.RenderMode = RenderMode.SoftwareOnly;
+
+            pluginListView = (CollectionView)CollectionViewSource.GetDefaultView(pluginList.ItemsSource);
+            pluginListView.Filter = PluginFilter;
         }
 
         private void OnAutoStartupChecked(object sender, RoutedEventArgs e)
@@ -247,6 +255,7 @@ namespace Flow.Launcher
                     PluginManager.API.OpenDirectory(directory);
             }
         }
+
         #endregion
 
         #region Proxy
@@ -263,6 +272,7 @@ namespace Flow.Launcher
         {
             viewModel.UpdateApp(); // TODO: change to command
         }
+
 
         private void OnRequestNavigate(object sender, RequestNavigateEventArgs e)
         {
@@ -307,7 +317,7 @@ namespace Flow.Launcher
 
         private void OnExternalPluginInstallClick(object sender, RoutedEventArgs e)
         {
-            if(sender is Button { DataContext: UserPlugin plugin })
+            if (sender is Button { DataContext: UserPlugin plugin })
             {
                 var pluginsManagerPlugin = PluginManager.GetPluginForId("9f8f9b14-2518-4907-b211-35ab6290dee7");
                 var actionKeyword = pluginsManagerPlugin.Metadata.ActionKeywords.Count == 0 ? "" : pluginsManagerPlugin.Metadata.ActionKeywords[0];
@@ -326,7 +336,7 @@ namespace Flow.Launcher
             textBox.MoveFocus(tRequest);
         }
 
-        private void ColorSchemeSelectedIndexChanged(object sender, EventArgs e) 
+        private void ColorSchemeSelectedIndexChanged(object sender, EventArgs e)
             => ThemeManager.Current.ApplicationTheme = settings.ColorScheme switch
             {
                 Constant.Light => ApplicationTheme.Light,
@@ -370,5 +380,38 @@ namespace Flow.Launcher
             RefreshMaximizeRestoreButton();
         }
 
+        private CollectionView pluginListView;
+
+        private bool PluginFilter(object item)
+        {
+            if (string.IsNullOrEmpty(pluginFilterTxb.Text))
+                return true;
+            if (item is PluginViewModel model)
+            {
+                return StringMatcher.FuzzySearch(pluginFilterTxb.Text, model.PluginPair.Metadata.Name).IsSearchPrecisionScoreMet();
+            }
+            return false;
+        }
+
+        private string lastSearch = "";
+
+        private void RefreshPluginListEventHandler(object sender, RoutedEventArgs e)
+        {
+            if (pluginFilterTxb.Text != lastSearch)
+            {
+                lastSearch = pluginFilterTxb.Text;
+                pluginListView.Refresh();
+            }
+        }
+        private void PluginFilterTxb_OnKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+                RefreshPluginListEventHandler(sender, e);
+        }
+        private void OnPluginSettingKeydown(object sender, KeyEventArgs e)
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.F)
+                pluginFilterTxb.Focus();
+        }
     }
 }
