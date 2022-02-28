@@ -593,7 +593,7 @@ namespace Flow.Launcher.Plugin.Program.Programs
                 while (reader.TryRead(out _))
                 {
                 }
-                Main.IndexWin32Programs();
+                await Task.Run(Main.IndexWin32Programs);
             }
         }
         
@@ -609,6 +609,8 @@ namespace Flow.Launcher.Plugin.Program.Programs
             watcher.Deleted += static (_, _) => indexQueue.Writer.TryWrite(default);
             watcher.EnableRaisingEvents = true;
             watcher.IncludeSubdirectories = true;
+            
+            Watchers.Add(watcher);
         }
 
         public static void Dispose()
