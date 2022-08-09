@@ -186,6 +186,14 @@ namespace Flow.Launcher.Plugin.WebSearch
                 Url = "https://www.baidu.com/#ie=UTF-8&wd={q}",
                 Enabled = true
             }
+            new SearchSource
+            {
+                Title = "Medium",
+                ActionKeyword = "med",
+                Icon = "medium.png",
+                Url = "https://medium.com/search?q={q}",
+                Enabled = true
+            }            
         };
 
         [JsonIgnore]
